@@ -66,6 +66,15 @@ class VocabParallelEmbeddingWithLoRA(BaseLayerWithLoRA):
         super().__init__(base_layer, lora_rank, scaling, lora_backend)
         self.weight = base_layer.weight
 
+    def set_lora_info(
+        self,
+        A_buffer: torch.Tensor,
+        B_buffer: torch.Tensor,
+    ):
+        self.set_lora = True
+        self.A_buffer = A_buffer
+        self.B_buffer = B_buffer
+
 
 class ColumnParallelLinearWithLoRA(BaseLayerWithLoRA):
     def __init__(

@@ -30,7 +30,6 @@ class LoRAType(Enum):
     LORA_A = 0
     LORA_B = 1
 
-
 def get_layer_id(name: str) -> int:
     """
     Extract integer id of layer from its name in string.
@@ -68,6 +67,21 @@ def get_customized_names_from_hf_names(
         }
         return {params_mapping.get(name, name) for name in hf_module_names}
 
+def get_vocab_size(
+    config: AutoConfig,
+) -> int:
+    """
+    Return the vocab size of the model.
+    """
+    return config.vocab_size
+
+def get_embed_dim(
+    config: AutoConfig,
+) -> int:
+    """
+    Return the embed dim of the model.
+    """
+    return config.hidden_size
 
 def get_hidden_dim(
     module_name: str, config: AutoConfig, base_model: torch.nn.Module
