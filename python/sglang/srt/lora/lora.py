@@ -79,6 +79,8 @@ class LoRAAdapter(nn.Module):
         self.weights: Dict[str, torch.Tensor] = {}
         self.weights_gpu: Dict[str, torch.Tensor] = {}
 
+        self.extra_vocab_size: int = 0
+
     def load_to_gpu(self):
         for name, weight in self.weights.items():
             self.weights_gpu[name] = weight.to(torch.float16).to("cuda")
@@ -107,6 +109,8 @@ class LoRAAdapter(nn.Module):
                 self.layers[layer_id].weights[name] = loaded_weight.cpu()
             else:
                 self.weights[name] = loaded_weight.cpu()
+                if "input_embeddings" in name:
+                    self.extra_vocab_size = loaded_weight.shape[0]
 
         # stack kv_proj and gate_up_proj
         for i in range(self.base_hf_config.num_hidden_layers):

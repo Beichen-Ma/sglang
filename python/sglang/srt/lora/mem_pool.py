@@ -8,6 +8,8 @@ from sglang.srt.lora.utils import (
     LoRAType,
     get_hidden_dim,
     get_stacked_multiply,
+    get_vocab_size,
+    get_embed_dim,
     get_weight_name,
 )
 
@@ -20,6 +22,7 @@ class LoRAMemoryPool:
         base_hf_config: AutoConfig,
         max_loras_per_batch: int,
         max_lora_dim: int,
+        max_extra_vocab_size: int,
         dtype: torch.dtype,
     ):
 
@@ -27,6 +30,7 @@ class LoRAMemoryPool:
         self.num_layer: int = base_hf_config.num_hidden_layers
         self.max_loras_per_batch: int = max_loras_per_batch
         self.max_lora_dim: int = max_lora_dim
+        self.max_extra_vocab_size: int = max_extra_vocab_size
         self.dtype: torch.dtype = dtype
 
         # Both A_buffer and B_buffer maps lora weight names to its buffer space.
@@ -36,6 +40,9 @@ class LoRAMemoryPool:
         #   (stacked_num, max_loras_per_batch, output_dim, max_lora_dim)
         self.A_buffer: Dict[str, List[torch.Tensor]] = {}
         self.B_buffer: Dict[str, List[torch.Tensor]] = {}
+        # embedding_buffer contains num_layer number of row-major tensors with shape
+        #   (max_loras_per_batch, max_extra_vocab_size, embed_dim)
+        self.embedding_buffer: Dict[str, List[torch.Tensor]] = {} if self.max_extra_vocab_size > 0 else None
 
         # Lora uid -> buffer idx in memory pool
         self.uid_to_buffer_id: Dict[Optional[str], int] = {}
@@ -52,10 +59,50 @@ class LoRAMemoryPool:
     ):
 
         # lora_weight_names is a set of name pairs indicating each pair of lora modules to load
-        #   e.g., {("qkv_proj", "q_proj"), ("qkv_proj", "kv_proj"), ("o_proj", "o_proj")}
+        #   e.g., {("qkv_proj", "q_proj"), ("qkv_proj", "kv_proj"), ("o_proj", "o_proj"), ("embed_tokens", "embed_tokens")}
         self.lora_weight_names: Set[Tuple[str]] = lora_weight_names
 
         for module_A, module_B in lora_weight_names:
+            if module_A == "embed_tokens" and module_B == "embed_tokens":
+                base_vocab_size = get_vocab_size(self.base_hf_config)
+                self.A_buffer[module_A] = [
+                    torch.empty(
+                        (
+                            self.max_loras_per_batch,
+                            self.max_lora_dim,
+                            base_vocab_size + self.max_extra_vocab_size,
+                        ),
+                        dtype=self.dtype,
+                        device="cuda",
+                    )
+                ]
+
+                embed_dim = get_embed_dim(self.base_hf_config)
+                self.B_buffer[module_B] = [
+                    torch.empty(
+                        (
+                            1,
+                            self.max_loras_per_batch,
+                            embed_dim,
+                            self.max_lora_dim,
+                        ),
+                        dtype=self.dtype,
+                        device="cuda",
+                    )
+                ]
+                
+                self.embedding_buffer = [
+                    torch.empty(
+                        (
+                            self.max_loras_per_batch,
+                            self.max_extra_vocab_size,
+                            embed_dim,
+                        ),
+                        dtype=self.dtype,
+                        device="cuda",
+                    )
+                ]
+
             # Init A tensor, column_major=False
             input_dim, _ = get_hidden_dim(module_A, self.base_hf_config, base_model)
             c = get_stacked_multiply(module_A)
@@ -159,7 +206,23 @@ class LoRAMemoryPool:
                         else:
                             self.B_buffer[lora_weight_name][layer_id][0][
                                 buffer_id
-                            ].copy_(weights)
+                             ].copy_(weights)
+                            
+        for name, weights in lora_adapter.weights.items():
+            if "lora_embedding_A" in name:
+                lora_weight_name = get_weight_name(
+                    name, self.lora_weight_names, LoRAType.LORA_A
+                )
+                if lora_weight_name:
+                    self.A_buffer[lora_weight_name][0][buffer_id].copy_(weights)
+            elif "lora_embedding_B" in name:
+                lora_weight_name = get_weight_name(
+                    name, self.lora_weight_names, LoRAType.LORA_B
+                )
+                if lora_weight_name:
+                    self.B_buffer[lora_weight_name][0][0][buffer_id].copy_(weights)
+            elif "input_embeddings" in name:
+                self.embedding_buffer[buffer_id].copy_(weights)
 
     def get_tensor(
         self, weight_name: str, layer_id: int, lora_type: LoRAType

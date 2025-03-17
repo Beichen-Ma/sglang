@@ -19,12 +19,14 @@ import torch
 
 from sglang.test.runners import HFRunner, SRTRunner
 
+CUDA_VISIBLE_DEVICES = "0"
+
 LORA_SETS = [
     # {
     #     "base": "meta-llama/Llama-2-7b-hf",
     #     "loras": ["RuterNorway/Llama-2-7b-chat-norwegian-LoRa"],
     # },
-    {"base": "meta-llama/Llama-2-7b-hf", "loras": ["winddude/wizardLM-LlaMA-LoRA-7B"]},
+    # {"base": "meta-llama/Llama-2-7b-hf", "loras": ["winddude/wizardLM-LlaMA-LoRA-7B"]},
     # {"base": "Qwen/Qwen2.5-14B-Instruct", "loras": ["mssongit/Qwen2.5-14B-SFT-LoRA"]},
     # {"base": "mistralai/Mistral-7B-Instruct-v0.3", "loras": ["/home/ying/test_lora"]},
     # {
@@ -37,7 +39,7 @@ LORA_SETS = [
     #         "/home/ying/test_lora_4",
     #     ],
     # },
-    # {"base": "meta-llama/Llama-2-7b-hf", "loras": ["yard1/llama-2-7b-sql-lora-test"]},
+    {"base": "meta-llama/Llama-2-7b-hf", "loras": ["yard1/llama-2-7b-sql-lora-test"]},
 ]
 TORCH_DTYPES = [torch.float16]
 

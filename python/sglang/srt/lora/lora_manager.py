@@ -104,13 +104,16 @@ class LoRAManager:
         assert all(x.hf_config["r"] == self.max_lora_dim for x in self.configs.values())
         assert all(x.scaling == self.scaling for x in self.loras.values())
 
+        # extra vocab size
+        self.max_extra_vocab_size: int = max([x.extra_vocab_size for x in self.loras.values()])
+
         # Convert original model layers to layers with LoRA
         self.convert_to_lora_layers()
 
     def init_lora_memory_pool(self):
         # Initialize memory pool
         self.memory_pool = LoRAMemoryPool(
-            self.base_hf_config, self.max_loras_per_batch, self.max_lora_dim, self.dtype
+            self.base_hf_config, self.max_loras_per_batch, self.max_lora_dim, self.max_extra_vocab_size, self.dtype
         )
 
         # Initialize target lora modules in memory pool
