@@ -28,6 +28,7 @@ class LoRAConfig:
         self.target_modules = self.hf_config["target_modules"]
 
         # TODO: Support more modules
+        # FIXME: change to lm_head
         if any(module in self.target_modules for module in ["llm_head"]):
             raise ValueError("Not supported yet")
 

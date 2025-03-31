@@ -72,7 +72,7 @@ class LoRAAdapter(nn.Module):
         self.weights: Dict[str, torch.Tensor] = {}
 
         self.weights_gpu: Dict[str, torch.Tensor] = {}
-
+        self.vocab_size: int = base_hf_config.vocab_size
         self.extra_vocab_size: int = 0
 
     def load_to_gpu(self):

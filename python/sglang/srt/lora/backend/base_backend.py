@@ -1,4 +1,4 @@
-from typing import Tuple, Union
+from typing import Tuple, Union, Optional
 
 import torch
 
@@ -37,6 +37,32 @@ class BaseLoRABackend:
         self.batch_info = batch_info
         self.fuse_output_scaling_add = get_fuse_output_scaling_add_from_name(name)
         self.fuse_stacked_lora_b = get_fuse_stacked_lora_b_from_name(name)
+
+    def run_lora_a_embedding(
+        self, x: torch.Tensor, weights: torch.Tensor, *args, **kwargs
+    ) -> torch.Tensor:
+        """Run the lora_a embedding lookup for tokens.
+        
+        Args:
+            x: input token indices with shape (s,), where s is the sum of all sequence lengths
+            weights: lora_a weights for embedding with shape (num_lora, r, vocab_size)
+            
+        Returns:
+            result with shape (s, r) containing the embedding vectors
+        """
+        pass
+
+    def lora_embedding(self, x: torch.Tensor, embedding_buffer: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+        """Run the lora embedding lookup for tokens.
+        
+        Args:
+            x: input token indices with shape (s,), where s is the sum of all sequence lengths
+            embedding_buffer: extended vocabulary embeddings with shape (num_lora, extra_vocab_size, embedding_dim)
+
+        Returns:
+            result with shape (s, embedding_dim) containing the embedding vectors
+        """
+        pass
 
     def run_lora_a_sgemm(
         self, x: torch.Tensor, weights: torch.Tensor, *args, **kwargs

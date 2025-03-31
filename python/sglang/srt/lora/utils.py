@@ -36,6 +36,8 @@ def get_layer_id(name: str) -> int:
     """
     match = re.search(r"layers\.(\d+)\.", name)
     if match is None:
+        if "embed_tokens" in name:
+            return -1
         return None
     return int(match.group(1))
 
@@ -75,7 +77,7 @@ def get_vocab_size(
     """
     return config.vocab_size
 
-def get_embed_dim(
+def get_embedding_dim(
     config: AutoConfig,
 ) -> int:
     """

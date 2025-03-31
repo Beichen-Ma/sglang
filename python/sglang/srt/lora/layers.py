@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import torch
 from torch import nn
@@ -70,11 +70,54 @@ class VocabParallelEmbeddingWithLoRA(BaseLayerWithLoRA):
         self,
         A_buffer: torch.Tensor,
         B_buffer: torch.Tensor,
+        embedding_buffer: Optional[torch.Tensor],
     ):
         self.set_lora = True
         self.A_buffer = A_buffer
         self.B_buffer = B_buffer
+        if embedding_buffer is not None:
+            self.embedding_buffer = embedding_buffer 
+    
+    def apply_lora(self, base_output: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+        backend_kwargs = {"base_output": base_output, "scaling": self.scaling}
+        lora_a_output = self.lora_backend.run_lora_a_embedding(x, self.A_buffer)
+        lora_output = self.lora_backend.run_lora_b_sgemm(
+            lora_a_output,
+            self.B_buffer[0],
+            **backend_kwargs,
+        )
+        return (
+            lora_output
+            if self.lora_backend.fuse_output_scaling_add
+            else base_output + lora_output * self.scaling
+        )
 
+    def forward(self, input_: torch.Tensor):
+        if self.embedding_buffer is not None:
+            full_output = torch.zeros(
+                (input_.size(0), self.base_layer.weight.size(1)),
+                dtype=self.base_layer.weight.dtype,
+                device=input_.device
+            )
+            added_tokens_mask = torch.where(input_ > self.base_layer.org_vocab_size-1, 1, 0)
+            base_output = self.base_layer.forward(input_[~added_tokens_mask])
+            full_output[~added_tokens_mask] = base_output
+            if added_tokens_mask.any():
+                lora_embedding = self.lora_backend.lora_embedding(
+                    input_[added_tokens_mask],
+                    self.embedding_buffer,
+                    scaling=self.scaling,
+                )
+                full_output[added_tokens_mask] = lora_embedding
+        else:
+            full_output = self.base_layer.forward(input_)
+
+        if self.set_lora:
+            lora_output = self.apply_lora(full_output, input_)
+        else:
+            lora_output = full_output
+
+        return lora_output
 
 class ColumnParallelLinearWithLoRA(BaseLayerWithLoRA):
     def __init__(

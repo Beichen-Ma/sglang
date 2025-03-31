@@ -81,6 +81,8 @@ class LoRAManager:
         self.hf_target_names: Set[str] = set()
         for name, path in self.lora_paths.items():
             self.configs[name] = LoRAConfig(path)
+            # FIXME: remove this after testing
+            self.configs[name].target_modules.remove("lm_head")
             self.hf_target_names.update(self.configs[name].target_modules)
 
         # Target lora weight names for lora_a and lora_b modules repectively.
@@ -179,6 +181,20 @@ class LoRAManager:
                             "kv_proj", layer_id, LoRAType.LORA_B
                         ),
                     )
+                elif "embed_tokens" in module_name:
+                    weight_name = get_weight_name(
+                        module_name, self.lora_weight_names, LoRAType.LORA_A
+                    )
+                    module.set_lora_info(
+                        self.memory_pool.get_tensor(
+                            weight_name, 0, LoRAType.LORA_A
+                        ),
+                        self.memory_pool.get_tensor(
+                            weight_name, 0, LoRAType.LORA_B
+                        ),
+                        self.memory_pool.get_embedding_tensor(),
+                    )
+
                 else:
                     weight_name = get_weight_name(
                         module_name, self.lora_weight_names, LoRAType.LORA_A
@@ -210,6 +226,9 @@ class LoRAManager:
         self.lora_modules: Dict[int, List[Tuple[str, BaseLayerWithLoRA]]] = {
             i: [] for i in range(self.base_hf_config.num_hidden_layers)
         }
+        # embedding layer
+        self.lora_modules[-1]=[]
+        
         for module_name, module in self.base_model.named_modules():
             # The module should be converted if it is included in target_names
             if module_name.split(".")[-1] in customized_target_names:

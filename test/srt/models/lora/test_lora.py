@@ -19,7 +19,7 @@ import torch
 
 from sglang.test.runners import HFRunner, SRTRunner
 
-CUDA_VISIBLE_DEVICES = "0"
+CUDA_VISIBLE_DEVICES = "1"
 
 LORA_SETS = [
     # {

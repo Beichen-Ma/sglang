@@ -1,5 +1,6 @@
 import torch
-
+import torch.nn.functional as F
+from typing import Optional
 from sglang.srt.lora.backend import BaseLoRABackend
 from sglang.srt.lora.triton_ops import (
     gate_up_lora_b_fwd,
@@ -15,6 +16,54 @@ class TritonLoRABackend(BaseLoRABackend):
     def __init__(self, name: str, batch_info: LoRABatchInfo = None):
         super().__init__(name, batch_info)
 
+    def run_lora_a_embedding(
+        self, x: torch.Tensor, weights: torch.Tensor, *args, **kwargs
+    ) -> torch.Tensor:
+        s = x.size(0)
+        r = weights.size(1)
+        
+        output = torch.zeros((s, r), device=x.device, dtype=weights.dtype)
+        
+        for batch_idx in range(self.batch_info.bs):
+            lora_id = self.batch_info.weight_indices[batch_idx].item()
+            
+            if self.batch_info.seg_indptr is not None:
+                seq_start = self.batch_info.seg_indptr[batch_idx].item()
+                seq_end = self.batch_info.seg_indptr[batch_idx + 1].item()
+            else:
+                seq_start = batch_idx
+                seq_end = batch_idx + 1
+            
+            if seq_end > seq_start:
+                seq_tokens = x[seq_start:seq_end]
+                seq_embeddings = F.embedding(seq_tokens, weights[lora_id])
+                output[seq_start:seq_end] = seq_embeddings
+        
+        return output
+
+    def lora_embedding(self, x: torch.Tensor, embedding_buffer: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+        s = x.size(0)
+        embed_dim = embedding_buffer.size(2)
+
+        output = torch.zeros((s, embed_dim), device=x.device, dtype=embedding_buffer.dtype)
+
+        for batch_idx in range(self.batch_info.bs):
+            lora_id = self.batch_info.weight_indices[batch_idx].item()
+            
+            if self.batch_info.seg_indptr is not None:
+                seq_start = self.batch_info.seg_indptr[batch_idx].item()
+                seq_end = self.batch_info.seg_indptr[batch_idx + 1].item()
+            else:
+                seq_start = batch_idx
+                seq_end = batch_idx + 1
+            
+            if seq_end > seq_start:
+                seq_tokens = x[seq_start:seq_end]
+                seq_embeddings = F.embedding(seq_tokens, embedding_buffer[lora_id])
+                output[seq_start:seq_end] = seq_embeddings
+        
+        return output
+        
     def run_lora_a_sgemm(
         self, x: torch.Tensor, weights: torch.Tensor, *args, **kwargs
     ) -> torch.Tensor:
@@ -89,3 +138,4 @@ class TritonLoRABackend(BaseLoRABackend):
             scaling,
         )
         return lora_output
+    
