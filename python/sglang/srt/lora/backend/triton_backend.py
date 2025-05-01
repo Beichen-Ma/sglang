@@ -36,7 +36,7 @@ class TritonLoRABackend(BaseLoRABackend):
             
             if seq_end > seq_start:
                 seq_tokens = x[seq_start:seq_end]
-                seq_embeddings = F.embedding(seq_tokens, weights[lora_id])
+                seq_embeddings = F.embedding(seq_tokens, weights[lora_id].transpose(0, 1))
                 output[seq_start:seq_end] = seq_embeddings
         
         return output
